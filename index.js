@@ -1,67 +1,40 @@
+const startDebugger = require("debug")("app:startup");
+const dbDebugger = require("debug")("app:db");
+const config = require("config");
+const helmet = require("helmet");
+const morgan = require("morgan");
 const Joi = require("joi");
 const express = require("express");
+const logger = require("./middleware/logger");
+const courses = require("./routes/courses");
+const home = require("./routes/home");
 const req = require("express/lib/request");
 const res = require("express/lib/response");
 const { send } = require("express/lib/response");
 const app = express();
 
+app.set("view engine", "pug");
+app.set("views", "./views");
+
 app.use(express.json());
-const courses = [
-  { id: 1, name: "course1" },
-  { id: 2, name: "course2" },
-  { id: 3, name: "course3" },
-];
-app.get("/", (req, res) => {
-  res.send("hello world");
-});
+app.use(express.urlencoded({ extended: true }));
+app.use(express.static("public"));
+app.use(helmet());
+app.use("/api/courses", courses);
+app.use("/", home);
 
-app.get("/api/courses", (req, res) => {
-  res.send(courses);
-});
+//configuration
+console.log("Application Name: " + config.get("name"));
+console.log("Mail server: " + config.get("mail.host"));
 
-app.get("/api/courses/:id", (req, res) => {
-  const course = courses.find((c) => c.id === parseInt(req.params.id));
-  if (!course) res.status(404).send("The course id does not exit");
-  res.send(course);
-});
+if (app.get("env") === "development") {
+  app.use(morgan("tiny"));
+  startDebugger("morgan enabled");
+}
 
-app.post("/api/courses", (req, res) => {
-  const { error } = validateCourse(req.body);
-  if (error) {
-    res.status(400).send(error.details[0].message);
-    return;
-  }
-  const addCourse = {
-    id: courses.length + 1,
-    name: req.body.name,
-  };
-  courses.push(addCourse);
-  res.send(addCourse);
-});
-
-app.put("/api/courses/:id", (req, res) => {
-  const course = courses.find((c) => c.id === parseInt(req.params.id));
-  if (!course) res.status(404).send("The course id does not exit");
-
-  const { error } = validateCourse(req.body);
-  if (error) {
-    res.status(400).send(error.details[0].message);
-    return;
-  }
-
-  course.name = req.body.name;
-  res.send(course);
-});
+app.use(logger);
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`listening to port ${port} ...`);
 });
-
-function validateCourse(course) {
-  const schema = {
-    name: Joi.string().min(3).required(),
-  };
-
-  return Joi.validate(course, schema);
-}
